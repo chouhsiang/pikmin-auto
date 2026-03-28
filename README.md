@@ -17,41 +17,41 @@
 ## 安裝
 
 ```bash
-cd /Users/hchou/Workspace/local2
+cd /path/to/pikmin-auto
 pip install -r requirements.txt
 ```
 
 ## 執行
 
-### 1. 啟動後端
-
-請**先進入 `backend` 目錄**再執行（否則會出現 `Could not import module "main"`）：
+### 本機（專案根目錄）
 
 ```bash
-cd backend
-python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+./run.sh
 ```
 
-若要在專案根目錄執行，請改指定模組路徑：
+或手動（埠號與 `run.sh` 一致為 8964）：
 
 ```bash
-python3 -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+python3 -m uvicorn main:app --host 127.0.0.1 --port 8964
 ```
 
-瀏覽器開啟：**http://localhost:8000**
+瀏覽器可開啟專案說明之 GitHub Pages 介面；API 位於 **http://127.0.0.1:8964**。
 
-### 2. iOS 17+ 使用 RSD 隧道（建議）
+### macOS：暫存目錄拉程式後執行（`bootstrap-macos.sh`）
 
-若裝置為 **iOS 17 以上**，模擬座標需透過 DVT 的 RSD 連線，請先建立隧道：
+在未安裝 Xcode Command Line Tools 時，系統的 `/usr/bin/python3` 常只是 **stub**（無法當完整 Python 用）。`bootstrap-macos.sh` 會優先使用 Homebrew／python.org 的 Python；若沒有，會**自動下載**預編譯 CPython 到暫存目錄（不需 xcode-select，需網路連 GitHub）。
 
 ```bash
-# 終端機 A：建立隧道（需 sudo）
-sudo python3 -m pymobiledevice3 remote start-quic-tunnel
+./bootstrap-macos.sh
 ```
 
-輸出會包含 `serverAddress` 與 `serverRSDPort`。在網頁表頭「RSD 主機」與「埠」欄位填入這兩項後，再點選地圖設定座標。
+會在系統暫存路徑下載／更新原始碼、建立 venv 並啟動 uvicorn。詳見腳本開頭註解。
 
-### 3. 掛載 Developer Disk（若尚未掛載）
+### iOS 17+ 與 tunneld
+
+若使用 **tunneld**（例如 `run.sh` 內的寫法），請依終端機提示使用 `sudo` 啟動；需與後端使用**同一個** Python 環境中的 `pymobiledevice3`。
+
+### 掛載 Developer Disk（若尚未掛載）
 
 ```bash
 python3 -m pymobiledevice3 mounter auto-mount
@@ -60,12 +60,11 @@ python3 -m pymobiledevice3 mounter auto-mount
 ## 專案結構
 
 ```
-local2/
-├── backend/
-│   ├── main.py          # FastAPI 後端與 API
-│   └── static/
-│       ├── index.html   # 地圖頁
-│       └── app.js       # 地圖邏輯與 API 呼叫
+pikmin-auto/
+├── main.py           # FastAPI 後端與 API
+├── static/           # 前端（index.html、app.js、app.css）
+├── run.sh            # 本機一鍵啟動（tunneld + uvicorn）
+├── bootstrap-macos.sh  # macOS：暫存目錄拉 repo + venv + uvicorn
 ├── requirements.txt
 └── README.md
 ```
@@ -79,5 +78,5 @@ local2/
 
 ## 注意事項
 
-- 後端以 **subprocess** 呼叫 `pymobiledevice3 developer dvt simulate-location set` 設定座標。部分 iOS 版本或連線方式可能不穩定。
+- 後端透過 **pymobiledevice3** 與裝置通訊；部分 iOS 版本或連線方式可能不穩定。
 - 使用前請確認裝置已信任此電腦，且必要時已掛載 Developer Disk Image。
