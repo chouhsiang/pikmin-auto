@@ -13,12 +13,9 @@ from urllib.request import urlopen
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
 
 app = FastAPI(title="iOS 座標模擬", description="透過網頁地圖設定 iPhone 模擬位置")
 
@@ -283,20 +280,3 @@ async def set_location(body: LocationSet):
     return {"ok": True, "lat": body.lat, "lng": body.lng}
 
 
-# 靜態檔案（前端）
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-
-@app.get("/app.js")
-async def app_js():
-    return FileResponse(STATIC_DIR / "app.js", media_type="application/javascript")
-
-
-@app.get("/app.css")
-async def app_css():
-    return FileResponse(STATIC_DIR / "app.css", media_type="text/css")
-
-
-@app.get("/")
-async def index():
-    return FileResponse(STATIC_DIR / "index.html")

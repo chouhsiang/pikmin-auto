@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REQ_FILE="${ROOT_DIR}/requirements.txt"
 VENV_DIR="${ROOT_DIR}/.venv"
+VENV_PY="${VENV_DIR}/bin/python"
 
 log() { printf "%s\n" "$*"; }
 warn() { printf "WARN: %s\n" "$*" >&2; }
@@ -41,8 +42,6 @@ ensure_xcode_clt() {
   fi
 
   log "尚未安裝 Xcode Command Line Tools，將嘗試啟動安裝..."
-  # 這會觸發 macOS 的安裝 UI/流程，通常需要使用者確認。
-  # 不建議加上 sudo，避免權限互動問題。
   if ! xcode-select --install >/dev/null 2>&1; then
     warn "無法直接觸發安裝（可能已在安裝中，或需要手動執行）。"
   fi
@@ -57,7 +56,7 @@ ensure_xcode_clt() {
     sleep 5
   done
 
-  die "Command Line Tools 仍未偵測到，請先完成安裝後再重新執行 init.sh"
+  die "Command Line Tools 仍未偵測到，請先完成安裝後再重新執行 app.sh"
 }
 
 ensure_python_and_venv() {
@@ -80,11 +79,7 @@ ensure_python_and_venv() {
 }
 
 install_deps() {
-  local py pip
-  py="${VENV_DIR}/bin/python"
-  pip="${VENV_DIR}/bin/pip"
-
-  [[ -x "${py}" ]] || die "虛擬環境 python 不存在：${py}"
+  [[ -x "${VENV_PY}" ]] || die "虛擬環境 python 不存在：${VENV_PY}"
   [[ -f "${REQ_FILE}" ]] || die "requirements.txt 不存在：${REQ_FILE}"
 
   # 盡量降低 pip 的資訊噴出量（只保留錯誤輸出到 stderr）
@@ -92,19 +87,50 @@ install_deps() {
   export PIP_NO_COLOR=1
 
   log "更新 pip/setuptools/wheel..."
-  "${py}" -m pip install --upgrade pip setuptools wheel >/dev/null
+  "${VENV_PY}" -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1
 
   log "安裝相依套件：$(basename "${REQ_FILE}")"
-  "${py}" -m pip install -q -r "${REQ_FILE}" >/dev/null
+  "${VENV_PY}" -m pip install -q -r "${REQ_FILE}" >/dev/null 2>&1
+}
+
+kill_old_tunneld() {
+  local pids
+  pids="$(pgrep -f pymobiledevice3 2>/dev/null || true)"
+  if [[ -z "${pids}" ]]; then
+    echo "未偵測到既有 pymobiledevice3 行程，跳過結束步驟。"
+    return 0
+  fi
+
+  echo "偵測到既有 pymobiledevice3 行程，準備結束中..."
+  # 先試不用 sudo；若權限不足再用 sudo（並避免 sudo usage）
+  if ! kill -9 ${pids} 2>/dev/null; then
+    sudo kill -9 ${pids} 2>/dev/null || true
+  fi
 }
 
 main() {
-  # 讓使用者知道目前在做什麼
-  log "=== init.sh：初始化環境 ==="
+  log "=== app.sh：初始化環境 ==="
   ensure_xcode_clt
   ensure_python_and_venv
   install_deps
-  log "=== 完成 ==="
+  log "=== 初始化完成 ==="
+
+  echo "=== 啟動前提醒 ==="
+  echo "接下來會執行 sudo：請在提示輸入此 Mac 的登入/管理員密碼。"
+  echo "請先確認 iOS 裝置已信任此電腦，必要時先掛載 Developer Disk。"
+  echo "完成後 API：http://127.0.0.1:8964"
+
+  # 清掉舊的行程（避免 port/連線衝突）
+  kill_old_tunneld
+
+  # 啟動 tunneld（需要 sudo 權限）
+  sudo "${VENV_PY}" -m pymobiledevice3 remote tunneld -d
+
+  # 打開專案頁面（如不需要可自行移除）
+  open "https://chouhsiang.github.io/pikmin-go/"
+
+  # 啟動後端 API
+  "${VENV_PY}" -m uvicorn main:app --reload --host 127.0.0.1 --port 8964
 }
 
 main "$@"
